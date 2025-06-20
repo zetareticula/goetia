@@ -17,7 +17,33 @@ clap = { version = "4.0", features = ["derive"] }
 log = "0.4"
 chrono = "0.4"
 anyhow = "1.0"
+futures = "0.3"
+url = "2.4"
+
 
 
 [dev-dependencies]
 tokio = { version = "1.40", features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = ["cli"]
+cli = []
+# Optional features for extended functionality
+# e.g., "web", "gui", "database"
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+
+[workspace]
+# This is a workspace configuration if you plan to have multiple crates in the same repository.
+# Uncomment and adjust if needed
+members = [
+    "dramatron-rs",
+    # "dramatron-rs-cli"
+]
+
+
+
+

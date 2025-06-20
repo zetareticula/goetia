@@ -21,18 +21,31 @@ pub trait LanguageApi: Send + Sync {
     ) -> anyhow::Result<Vec<LanguageResponse>>;
 }
 
-pub struct MockLanguageApi {
+pub struct CustomLanguageApi {
     hyperparameters: Hyperparameters,
+    model: Option<String>,
+    model_param: Option<String>,
+    config_sampling: Option<serde_json::Value>,
 }
 
-impl MockLanguageApi {
-    pub fn new(hyperparameters: Hyperparameters) -> Self {
-        Self { hyperparameters }
+impl CustomLanguageApi {
+    pub fn new(
+        hyperparameters: Hyperparameters,
+        model: Option<String>,
+        model_param: Option<String>,
+        config_sampling: Option<serde_json::Value>,
+    ) -> Self {
+        Self {
+            hyperparameters,
+            model,
+            model_param,
+            config_sampling,
+        }
     }
 }
 
 #[async_trait]
-impl LanguageApi for MockLanguageApi {
+impl LanguageApi for CustomLanguageApi {
     async fn sample(
         &self,
         prompt: &str,
