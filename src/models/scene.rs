@@ -34,4 +34,5 @@ impl Scene {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Scenes {
     pub scene_descriptions: HashMap<String, String>,
+    pub(crate) scenes: Vec<_>,
 } 

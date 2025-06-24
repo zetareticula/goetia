@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 
@@ -21,23 +20,10 @@ pub enum StoryGenerationError {
     #[error("Invalid level: {0}")]
     InvalidLevel(usize),
     #[error("Invalid scene index: {0}")]
-    InvalidSceneIndex(i32),
+    InvalidSceneIndex(usize),
     #[error("Missing prompt: {0}")]
     MissingPrompt(String),
-    #[error("Place not found: {0}")]
-    PlaceNotFound(String),
-    #[error("Other error: {0}")]
-    Other(#[from] anyhow::Error),
 }
-
-pub const LEVEL_NAMES: [&str; 6] = [
-    "storyline",
-    "title",
-    "characters",
-    "scenes",
-    "places",
-    "dialogs",
-];
 
 #[derive(Debug, Clone)]
 pub struct StoryGenerator {
@@ -53,6 +39,7 @@ pub struct StoryGenerator {
     dialogs: Vec<String>,
     interventions: HashMap<f64, String>,
     level: usize,
+    level_names: &'static [&'static str],
 }
 
 impl StoryGenerator {
@@ -62,28 +49,28 @@ impl StoryGenerator {
         hyperparameters: Hyperparameters,
         text_generator: TextGenerator,
     ) -> Self {
-        let mut prompts = HashMap::new();
-        prompts.insert("title".to_string(), vec!["".to_string()]);
-        prompts.insert("characters".to_string(), vec!["".to_string()]);
-        prompts.insert("scenes".to_string(), vec!["".to_string()]);
-        prompts.insert("places".to_string(), vec!["".to_string()]);
-        prompts.insert("dialogs".to_string(), vec!["".to_string()]);
-
         let mut generator = Self {
             storyline: storyline.clone(),
             prefixes,
             hyperparameters: hyperparameters.clone(),
             text_generator,
-            prompts,
+            prompts: HashMap::from([
+                ("title".to_string(), vec![]),
+                ("characters".to_string(), vec![]),
+                ("scenes".to_string(), vec![]),
+                ("places".to_string(), vec![]),
+                ("dialogs".to_string(), vec![]),
+            ]),
             title: Title::new(String::new()),
             characters: Characters {
                 character_descriptions: HashMap::new(),
             },
-            scenes: Scenes { scenes: vec![] },
+            scenes: Scenes { scenes: Vec::new() },
             places: HashMap::new(),
-            dialogs: vec!["".to_string()],
+            dialogs: Vec::new(),
             interventions: HashMap::new(),
             level: 0,
+            level_names: &["storyline", "title", "characters", "scenes", "places", "dialogs"],
         };
         generator.set_storyline(storyline);
         generator
@@ -97,8 +84,8 @@ impl StoryGenerator {
             storyline
         };
         self.storyline = storyline.clone();
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs_f64();
         self.interventions
@@ -125,7 +112,7 @@ impl StoryGenerator {
         &self.places
     }
 
-    pub fn dialogs(&self) -> &[String] {
+    pub fn dialogs(&self) -> &Vec<String> {
         &self.dialogs
     }
 
@@ -175,9 +162,9 @@ impl StoryGenerator {
     ) -> Result<(Characters, String), StoryGenerationError> {
         let characters_prefix = format!(
             "{}{}",
-            self.prefixes.get("CHARACTERS_PROMPT").ok_or_else(|| {
-                StoryGenerationError::MissingPrompt("CHARACTERS_PROMPT".to_string())
-            })?,
+            self.prefixes
+                .get("CHARACTERS_PROMPT")
+                .ok_or_else(|| StoryGenerationError::MissingPrompt("CHARACTERS_PROMPT".to_string()))?,
             self.storyline
         );
         let characters_text = self
@@ -186,7 +173,7 @@ impl StoryGenerator {
                 &characters_prefix,
                 client,
                 filter,
-                None,
+                Some(self.hyperparameters.sample_length),
                 self.hyperparameters.max_paragraph_length_characters,
                 seed,
                 num_samples,
@@ -199,6 +186,7 @@ impl StoryGenerator {
 
     pub async fn generate_scenes(
         &self,
+        character_descriptions: &HashMap<String, String>,
         client: &dyn LanguageApi,
         filter: Option<&dyn FilterApi>,
         seed: Option<u64>,
@@ -211,8 +199,8 @@ impl StoryGenerator {
                 .ok_or_else(|| StoryGenerationError::MissingPrompt("SCENE_PROMPT".to_string()))?,
             self.storyline
         );
-        for (name, description) in &self.characters.character_descriptions {
-            scenes_prefix.push_str(&format!("{}: {}\n", name, description));
+        for description in character_descriptions.values() {
+            scenes_prefix.push_str(&format!("{}\n", description));
         }
         scenes_prefix.push_str("\n**Scenes:**");
         let scenes_text = self
@@ -221,7 +209,7 @@ impl StoryGenerator {
                 &scenes_prefix,
                 client,
                 filter,
-                None,
+                Some(self.hyperparameters.sample_length),
                 self.hyperparameters.max_paragraph_length_scenes,
                 seed,
                 num_samples,
@@ -234,6 +222,7 @@ impl StoryGenerator {
 
     pub async fn generate_place_descriptions(
         &self,
+        scenes: &Scenes,
         client: &dyn LanguageApi,
         filter: Option<&dyn FilterApi>,
         seed: Option<u64>,
@@ -241,21 +230,22 @@ impl StoryGenerator {
     ) -> Result<(HashMap<String, Place>, Vec<String>), StoryGenerationError> {
         let mut place_descriptions = HashMap::new();
         let mut place_prefixes = Vec::new();
-        let place_prefix = format!(
+        let unique_place_names: std::collections::HashSet<String> =
+            scenes.scenes.iter().map(|scene| scene.place.clone()).collect();
+        let place_prefix_base = format!(
             "{}{}\n",
             self.prefixes
                 .get("SETTING_PROMPT")
                 .ok_or_else(|| StoryGenerationError::MissingPrompt("SETTING_PROMPT".to_string()))?,
             self.storyline
         );
-        let unique_place_names: Vec<String> =
-            self.scenes.scenes.iter().map(|s| s.place.clone()).collect();
+
         for place_name in unique_place_names {
-            let place_suffix = format!("Place: {}\nDescription: ", place_name);
+            let place_suffix = format!("Place: {}\nDescription:", place_name);
             let place_text = self
                 .text_generator
                 .generate_text(
-                    &format!("{}{}", place_prefix, place_suffix),
+                    &format!("{}{}", place_prefix_base, place_suffix),
                     client,
                     filter,
                     Some(self.hyperparameters.sample_length_place),
@@ -267,7 +257,7 @@ impl StoryGenerator {
                 .await?;
             let place = Place::from_string(&place_name, &format!("{}{}", place_suffix, place_text));
             place_descriptions.insert(place_name.clone(), place);
-            place_prefixes.push(format!("{}{}", place_prefix, place_suffix));
+            place_prefixes.push(format!("{}{}", place_prefix_base, place_suffix));
         }
         Ok((place_descriptions, place_prefixes))
     }
@@ -275,40 +265,41 @@ impl StoryGenerator {
     pub async fn generate_dialog(
         &self,
         scenes: &[Scene],
+        character_descriptions: &HashMap<String, String>,
+        place_descriptions: &HashMap<String, Place>,
         client: &dyn LanguageApi,
         filter: Option<&dyn FilterApi>,
         seed: Option<u64>,
         num_samples: usize,
     ) -> Result<(String, String), StoryGenerationError> {
         let scene = scenes.last().ok_or_else(|| {
-            StoryGenerationError::Other(anyhow::anyhow!("No scenes provided"))
+            StoryGenerationError::InvalidSceneIndex(0)
         })?;
         let mut place_t = format!("Place: {}\n", scene.place);
-        if let Some(place_description) = self.places.get(&scene.place) {
+        if let Some(place_description) = place_descriptions.get(&scene.place) {
             place_t.push_str(&format!("Description: {}\n", place_description.description));
         }
         let mut characters_t = String::from("Characters: ");
-        for (name, description) in &self.characters.character_descriptions {
+        for (name, description) in character_descriptions {
             if scene.beat.contains(name) {
-                characters_t.push_str(&format!("{}: {}\n", name, description));
+                characters_t.push_str(&format!("{}\n", description));
             }
         }
         let plot_element_t = format!("Plot element: {}\n", scene.plot_element);
-        let summary_t = if scenes.len() > 1 {
-            format!(
-                "Summary: {}\nPrevious beat: {}\n",
-                self.storyline,
-                scenes[scenes.len() - 2].beat
-            )
-        } else {
-            format!("Summary: {}\n", self.storyline)
-        };
+        let summary_t = format!(
+            "Summary: {}\n",
+            if scenes.len() > 1 {
+                format!("Previous beat: {}\n", scenes[scenes.len() - 2].beat)
+            } else {
+                String::new()
+            }
+        );
         let beat_t = format!("Beat: {}\n", scene.beat);
         let dialog_prefix = format!(
             "{}{}{}{}{}\n**Dialog:**\n",
-            self.prefixes.get("DIALOG_PROMPT").ok_or_else(|| {
-                StoryGenerationError::MissingPrompt("DIALOG_PROMPT".to_string())
-            })?,
+            self.prefixes
+                .get("DIALOG_PROMPT")
+                .ok_or_else(|| StoryGenerationError::MissingPrompt("DIALOG_PROMPT".to_string()))?,
             place_t,
             characters_t,
             plot_element_t,
@@ -321,7 +312,7 @@ impl StoryGenerator {
                 &dialog_prefix,
                 client,
                 filter,
-                None,
+                Some(self.hyperparameters.sample_length),
                 self.hyperparameters.max_paragraph_length,
                 seed,
                 num_samples,
@@ -333,19 +324,19 @@ impl StoryGenerator {
 
     pub async fn step(
         &mut self,
-        client: &dyn LanguageApi,
-        filter: Option<&dyn FilterApi>,
         level: Option<usize>,
         seed: Option<u64>,
-        idx: Option<i32>,
+        idx: Option<usize>,
+        client: &dyn LanguageApi,
+        filter: Option<&dyn FilterApi>,
     ) -> Result<bool, StoryGenerationError> {
         let level = level.unwrap_or(self.level);
-        if level >= LEVEL_NAMES.len() {
+        if level >= self.level_names.len() {
             return Err(StoryGenerationError::InvalidLevel(level));
         }
         self.level = level + 1;
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs_f64();
         self.interventions
@@ -353,117 +344,88 @@ impl StoryGenerator {
 
         match self.level {
             1 => {
-                let (title, titles_prefix) = self
-                    .generate_title(client, filter, seed, self.hyperparameters.num_samples)
-                    .await?;
-                self.title = title.clone();
-                self.prompts
-                    .get_mut("title")
-                    .unwrap()
-                    .push(titles_prefix.clone());
+                let (title, titles_prefix) = self.generate_title(client, filter, seed, self.hyperparameters.num_samples).await?;
                 self.interventions
-                    .get_mut(&timestamp)
-                    .unwrap()
-                    .push_str(&title.to_string());
-                Ok(!title.title.is_empty())
+                    .entry(timestamp)
+                    .and_modify(|e| *e += &title.to_string());
+                self.prompts.get_mut("title").unwrap().push(titles_prefix);
+                self.title = title;
+                Ok(!self.title.title.is_empty())
             }
             2 => {
-                let (characters, character_prompts) = self
-                    .generate_characters(client, filter, seed, self.hyperparameters.num_samples)
-                    .await?;
-                self.characters = characters.clone();
-                self.prompts
-                    .get_mut("characters")
-                    .unwrap()
-                    .push(character_prompts.clone());
+                let (characters, character_prompts) = self.generate_characters(client, filter, seed, self.hyperparameters.num_samples).await?;
                 self.interventions
-                    .get_mut(&timestamp)
-                    .unwrap()
-                    .push_str(&characters.to_string());
-                Ok(!characters.character_descriptions.is_empty())
+                    .entry(timestamp)
+                    .and_modify(|e| *e += &characters.to_string());
+                self.prompts.get_mut("characters").unwrap().push(character_prompts);
+                self.characters = characters;
+                Ok(!self.characters.character_descriptions.is_empty())
             }
             3 => {
-                let (scenes, scene_prompts) = self
-                    .generate_scenes(client, filter, seed, self.hyperparameters.num_samples)
-                    .await?;
-                self.scenes = scenes.clone();
-                self.prompts
-                    .get_mut("scenes")
-                    .unwrap()
-                    .push(scene_prompts.clone());
+                let (scenes, scene_prompts) = self.generate_scenes(&self.characters.character_descriptions, client, filter, seed, self.hyperparameters.num_samples).await?;
                 self.interventions
-                    .get_mut(&timestamp)
-                    .unwrap()
-                    .push_str(&scenes.to_string());
-                Ok(!scenes.scenes.is_empty())
+                    .entry(timestamp)
+                    .and_modify(|e| *e += &scenes.to_string());
+                self.prompts.get_mut("scenes").unwrap().push(scene_prompts);
+                self.scenes = scenes;
+                Ok(!self.scenes.scenes.is_empty())
             }
             4 => {
-                let (place_descriptions, place_prompts) = self
-                    .generate_place_descriptions(client, filter, seed, self.hyperparameters.num_samples)
-                    .await?;
-                self.places = place_descriptions.clone();
-                self.prompts.get_mut("places").unwrap().extend(place_prompts);
+                let (place_descriptions, place_prompts) = self.generate_place_descriptions(&self.scenes, client, filter, seed, self.hyperparameters.num_samples).await?;
                 for place in place_descriptions.values() {
                     self.interventions
-                        .get_mut(&timestamp)
-                        .unwrap()
-                        .push_str(&place.to_string());
+                        .entry(timestamp)
+                        .and_modify(|e| *e += &place.to_string());
                 }
-                let num_places = self
-                    .scenes
-                    .scenes
-                    .iter()
-                    .map(|s| s.place.clone())
-                    .collect::<std::collections::HashSet<_>>()
-                    .len();
-                Ok(place_descriptions.len() == num_places && num_places > 0)
+                self.prompts.get_mut("places").unwrap().extend(place_prompts);
+                self.places = place_descriptions;
+                let num_places = self.scenes.scenes.iter().map(|scene| scene.place.clone()).collect::<std::collections::HashSet<_>>().len();
+                Ok(self.places.len() == num_places && num_places > 0)
             }
             5 => {
-                let num_scenes = self.num_scenes();
                 if let Some(idx) = idx {
-                    if idx < 0 || idx as usize >= num_scenes {
-                        return Err(StoryGenerationError::InvalidSceneIndex(idx));
-                    }
-                    while self.dialogs.len() < num_scenes {
+                    while self.dialogs.len() <= idx {
                         self.dialogs.push(String::new());
-                    }
-                    while self.prompts.get("dialogs").unwrap().len() < num_scenes {
                         self.prompts.get_mut("dialogs").unwrap().push(String::new());
                     }
-                    let (dialog, dialog_prompt) = self
-                        .generate_dialog(
-                            &self.scenes.scenes[..=idx as usize],
-                            client,
-                            filter,
-                            seed,
-                            self.hyperparameters.num_samples,
-                        )
-                        .await?;
-                    self.dialogs[idx as usize] = dialog.clone();
-                    self.prompts.get_mut("dialogs").unwrap()[idx as usize] = dialog_prompt.clone();
+                    if idx >= self.scenes.scenes.len() {
+                        return Err(StoryGenerationError::InvalidSceneIndex(idx));
+                    }
+                    let (dialog, dialog_prefix) = self.generate_dialog(
+                        &self.scenes.scenes[..=idx],
+                        &self.characters.character_descriptions,
+                        &self.places,
+                        client,
+                        filter,
+                        seed,
+                        self.hyperparameters.num_samples,
+                    ).await?;
+                    self.dialogs[idx] = dialog.clone();
+                    self.prompts.get_mut("dialogs").unwrap()[idx] = dialog_prefix;
                     self.interventions
-                        .get_mut(&timestamp)
-                        .unwrap()
-                        .push_str(&dialog);
+                        .entry(timestamp)
+                        .and_modify(|e| *e += &dialog);
                 } else {
-                    let mut dialogs = Vec::new();
-                    let mut dialog_prompts = Vec::new();
-                    for k in 0..num_scenes {
-                        let (dialog, dialog_prompt) = self
-                            .generate_dialog(
+                    let results: Vec<_> = (0..self.scenes.scenes.len())
+                        .map(|k| async move {
+                            self.generate_dialog(
                                 &self.scenes.scenes[..=k],
+                                &self.characters.character_descriptions,
+                                &self.places,
                                 client,
                                 filter,
                                 seed,
                                 self.hyperparameters.num_samples,
                             )
-                            .await?;
-                        dialogs.push(dialog.clone());
-                        dialog_prompts.push(dialog_prompt.clone());
+                            .await
+                        })
+                        .collect::<Vec<_>>();
+                    let results = futures::future::try_join_all(results).await?;
+                    let (dialogs, dialog_prompts): (Vec<_>, Vec<_>) = results.into_iter().unzip();
+                    for dialog in &dialogs {
                         self.interventions
-                            .get_mut(&timestamp)
-                            .unwrap()
-                            .push_str(&dialog);
+                            .entry(timestamp)
+                            .and_modify(|e| *e += dialog);
                     }
                     self.dialogs = dialogs;
                     self.prompts.get_mut("dialogs").unwrap().extend(dialog_prompts);
@@ -485,33 +447,28 @@ impl StoryGenerator {
         }
     }
 
-    pub fn rewrite(
-        &mut self,
-        text: String,
-        level: usize,
-        entity: Option<String>,
-    ) -> Result<(), StoryGenerationError> {
-        if level >= LEVEL_NAMES.len() {
+    pub fn rewrite(&mut self, text: &str, level: usize, entity: Option<usize>) -> Result<(), StoryGenerationError> {
+        if level >= self.level_names.len() {
             return Err(StoryGenerationError::InvalidLevel(level));
         }
         let mut prompt_diff = String::new();
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs_f64();
 
         match level {
             0 => {
-                prompt_diff = diff_prompt_change_str(&self.storyline, &text);
-                self.set_storyline(text);
+                prompt_diff = diff_prompt_change_str(&self.storyline, text);
+                self.set_storyline(text.to_string());
             }
             1 => {
-                let title = Title::from_string(&text);
+                let title = Title::from_string(text);
                 prompt_diff = diff_prompt_change_str(&self.title.title, &title.title);
                 self.title = title;
             }
             2 => {
-                let characters = Characters::from_string(&text);
+                let characters = Characters::from_string(text);
                 prompt_diff = diff_prompt_change_dict(
                     &self.characters.character_descriptions,
                     &characters.character_descriptions,
@@ -519,43 +476,32 @@ impl StoryGenerator {
                 self.characters = characters;
             }
             3 => {
-                let scenes = Scenes::from_string(&text);
+                let scenes = Scenes::from_string(text);
                 prompt_diff = diff_prompt_change_scenes(&self.scenes.scenes, &scenes.scenes);
                 self.scenes = scenes;
             }
             4 => {
                 if let Some(entity) = entity {
-                    if self.places.contains_key(&entity) {
-                        let place_prefix = format!("Place: {}\nDescription: ", entity);
-                        let place = Place::from_string(&entity, &format!("{}{}", place_prefix, text));
-                        prompt_diff = diff_prompt_change_str(
-                            &self.places.get(&entity).unwrap().name,
-                            &place.name,
-                        );
+                    let entity_str = entity.to_string();
+                    if self.places.contains_key(&entity_str) {
+                        let place_prefix = format!("Place: {}\nDescription:", entity_str);
+                        let place = Place::from_string(&entity_str, &format!("{}{}", place_prefix, text));
+                        prompt_diff = diff_prompt_change_str(&self.places[&entity_str].name, &place.name);
                         prompt_diff.push_str(&format!(
                             "\n{}",
-                            diff_prompt_change_str(
-                                &self.places.get(&entity).unwrap().description,
-                                &place.description
-                            )
+                            diff_prompt_change_str(&self.places[&entity_str].description, &place.description)
                         ));
-                        self.places.insert(entity.clone(), place);
-                    } else {
-                        return Err(StoryGenerationError::PlaceNotFound(entity));
+                        self.places.insert(entity_str, place);
                     }
                 }
             }
             5 => {
-                if let Some(entity) = entity {
-                    let idx: usize = entity
-                        .parse()
-                        .map_err(|_| StoryGenerationError::InvalidSceneIndex(-1))?;
-                    if idx < self.num_scenes() {
-                        prompt_diff = diff_prompt_change_str(&self.dialogs[idx], &text);
-                        self.dialogs[idx] = text;
-                    } else {
-                        return Err(StoryGenerationError::InvalidSceneIndex(idx as i32));
+                if let Some(idx) = entity {
+                    if idx >= self.scenes.scenes.len() {
+                        return Err(StoryGenerationError::InvalidSceneIndex(idx));
                     }
+                    prompt_diff = diff_prompt_change_str(&self.dialogs[idx], text);
+                    self.dialogs[idx] = text.to_string();
                 }
             }
             _ => return Err(StoryGenerationError::InvalidLevel(level)),
@@ -563,32 +509,30 @@ impl StoryGenerator {
 
         if !prompt_diff.is_empty() {
             let intervention = format!(
-                "REWRITE {}{}\n{}",
-                LEVEL_NAMES[level],
-                entity.map(|e| format!(" {}", e)).unwrap_or_default(),
+                "REWRITE {} {}\n{}",
+                self.level_names[level],
+                entity.map_or(String::new(), |e| e.to_string()),
                 prompt_diff
             );
             self.interventions.insert(timestamp, intervention);
         }
-
         Ok(())
     }
 
     pub async fn complete(
         &mut self,
-        client: &dyn LanguageApi,
-        filter: Option<&dyn FilterApi>,
         level: usize,
         seed: Option<u64>,
         entity: Option<usize>,
-        sample_length: usize,
+        client: &dyn LanguageApi,
+        filter: Option<&dyn FilterApi>,
     ) -> Result<(), StoryGenerationError> {
-        if level >= LEVEL_NAMES.len() {
+        if level >= self.level_names.len() {
             return Err(StoryGenerationError::InvalidLevel(level));
         }
         let mut prompt_diff = String::new();
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs_f64();
 
@@ -597,11 +541,7 @@ impl StoryGenerator {
                 let text_characters = strip_remove_end(&self.characters.to_string());
                 let prompt = format!(
                     "{}{}",
-                    self.prompts
-                        .get("characters")
-                        .unwrap()
-                        .last()
-                        .unwrap(),
+                    self.prompts.get("characters").unwrap().last().unwrap_or(&String::new()),
                     text_characters
                 );
                 let text = self
@@ -610,8 +550,8 @@ impl StoryGenerator {
                         &prompt,
                         client,
                         filter,
-                        Some(sample_length),
-                        sample_length,
+                        Some(self.hyperparameters.sample_length),
+                        self.hyperparameters.sample_length,
                         seed,
                         1,
                         Some(self.hyperparameters.max_num_repetitions),
@@ -628,7 +568,7 @@ impl StoryGenerator {
                 let text_scenes = strip_remove_end(&self.scenes.to_string());
                 let prompt = format!(
                     "{}{}",
-                    self.prompts.get("scenes").unwrap().last().unwrap(),
+                    self.prompts.get("scenes").unwrap().last().unwrap_or(&String::new()),
                     text_scenes
                 );
                 let text = self
@@ -637,8 +577,8 @@ impl StoryGenerator {
                         &prompt,
                         client,
                         filter,
-                        Some(sample_length),
-                        sample_length,
+                        Some(self.hyperparameters.sample_length),
+                        self.hyperparameters.sample_length,
                         seed,
                         1,
                         Some(self.hyperparameters.max_num_repetitions),
@@ -649,39 +589,35 @@ impl StoryGenerator {
                 self.scenes = new_scenes;
             }
             5 => {
-                let num_scenes = self.num_scenes();
-                while self.dialogs.len() < num_scenes {
-                    self.dialogs.push(String::new());
-                }
-                while self.prompts.get("dialogs").unwrap().len() < num_scenes {
-                    self.prompts.get_mut("dialogs").unwrap().push(String::new());
-                }
                 if let Some(idx) = entity {
-                    if idx < num_scenes {
-                        let prompt = format!(
-                            "{}{}",
-                            self.prompts.get("dialogs").unwrap()[idx],
-                            self.dialogs[idx]
-                        );
-                        let text = self
-                            .text_generator
-                            .generate_text(
-                                &prompt,
-                                client,
-                                filter,
-                                Some(sample_length),
-                                sample_length,
-                                seed,
-                                1,
-                                Some(self.hyperparameters.max_num_repetitions),
-                            )
-                            .await?;
-                        let new_dialog = format!("{}{}", self.dialogs[idx], text);
-                        prompt_diff = diff_prompt_change_str(&self.dialogs[idx], &new_dialog);
-                        self.dialogs[idx] = new_dialog;
-                    } else {
-                        return Err(StoryGenerationError::InvalidSceneIndex(idx as i32));
+                    while self.dialogs.len() <= idx {
+                        self.dialogs.push(String::new());
+                        self.prompts.get_mut("dialogs").unwrap().push(String::new());
                     }
+                    if idx >= self.scenes.scenes.len() {
+                        return Err(StoryGenerationError::InvalidSceneIndex(idx));
+                    }
+                    let prompt = format!(
+                        "{}{}",
+                        self.prompts.get("dialogs").unwrap()[idx],
+                        self.dialogs[idx]
+                    );
+                    let text = self
+                        .text_generator
+                        .generate_text(
+                            &prompt,
+                            client,
+                            filter,
+                            Some(self.hyperparameters.sample_length),
+                            self.hyperparameters.sample_length,
+                            seed,
+                            1,
+                            Some(self.hyperparameters.max_num_repetitions),
+                        )
+                        .await?;
+                    let new_dialog = format!("{}{}", self.dialogs[idx], text);
+                    prompt_diff = diff_prompt_change_str(&self.dialogs[idx], &new_dialog);
+                    self.dialogs[idx] = new_dialog;
                 }
             }
             _ => return Err(StoryGenerationError::InvalidLevel(level)),
@@ -689,14 +625,13 @@ impl StoryGenerator {
 
         if !prompt_diff.is_empty() {
             let intervention = format!(
-                "COMPLETE {}{}\n{}",
-                LEVEL_NAMES[level],
-                entity.map(|e| format!(" {}", e)).unwrap_or_default(),
+                "COMPLETE {} {}\n{}",
+                self.level_names[level],
+                entity.map_or(String::new(), |e| e.to_string()),
                 prompt_diff
             );
             self.interventions.insert(timestamp, intervention);
         }
-
         Ok(())
     }
 }
