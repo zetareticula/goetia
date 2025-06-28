@@ -45,8 +45,8 @@ pub fn diff_prompt_change_scenes(before: &[Scene], after: &[Scene]) -> String {
         .zip(after.iter())
         .map(|(a, b)| {
             diff_prompt_change_list(
-                &[a.place.clone(), a.plot_element.clone(), a.beat.clone()],
-                &[b.place.clone(), b.plot_element.clone(), b.beat.clone()],
+                &[a.name.clone(), a.description.clone()],
+                &[b.name.clone(), b.description.clone()],
             )
         })
         .filter(|diff| !diff.is_empty())
@@ -55,11 +55,11 @@ pub fn diff_prompt_change_scenes(before: &[Scene], after: &[Scene]) -> String {
 }
 
 pub fn diff_prompt_change_dict(before: &HashMap<String, String>, after: &HashMap<String, String>) -> String {
-    let keys_before: Vec<_> = before.keys().collect();
-    let keys_after: Vec<_> = after.keys().collect();
+    let keys_before: Vec<String> = before.keys().cloned().collect();
+    let keys_after: Vec<String> = after.keys().cloned().collect();
     let diff_keys = diff_prompt_change_list(&keys_before, &keys_after);
-    let values_before: Vec<_> = before.values().collect();
-    let values_after: Vec<_> = after.values().collect();
+    let values_before: Vec<String> = before.values().cloned().collect();
+    let values_after: Vec<String> = after.values().cloned().collect();
     let diff_values = diff_prompt_change_list(&values_before, &values_after);
     format!("{}\n{}", diff_keys, diff_values).trim().to_string()
 }

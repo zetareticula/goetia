@@ -1,0 +1,6 @@
+/Users/xaxpmore/Documents/GitHub/goetia/target/debug/deps/libanstyle_query-f903a3cbd1f520c6.rmeta: /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/anstyle-query-1.1.3/src/lib.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/anstyle-query-1.1.3/src/windows.rs
+
+/Users/xaxpmore/Documents/GitHub/goetia/target/debug/deps/anstyle_query-f903a3cbd1f520c6.d: /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/anstyle-query-1.1.3/src/lib.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/anstyle-query-1.1.3/src/windows.rs
+
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/anstyle-query-1.1.3/src/lib.rs:
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/anstyle-query-1.1.3/src/windows.rs:

@@ -7,7 +7,6 @@ use std::fmt;
 use std::str::FromStr;
 
 
-#[derive(Debug, Serialize, Deserialize)]
 pub fn extract_elements(text: &str, begin: &str, end: &str) -> Vec<String> {
     let mut results = Vec::new();
     let mut start = 0;
@@ -25,7 +24,14 @@ pub fn extract_elements(text: &str, begin: &str, end: &str) -> Vec<String> {
     results
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub fn strip_end_marker(text: &str, marker: &str) -> String {
+    if text.ends_with(marker) {
+        text[..text.len() - marker.len()].to_string()
+    } else {
+        text.to_string()
+    }
+}
+
 pub fn strip_remove_end(text: &str) -> String {
     let text = text.trim();
     let end_marker_stripped = "**END**".trim();

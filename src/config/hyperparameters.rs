@@ -12,6 +12,7 @@ pub struct Hyperparameters {
     pub max_retries: usize,
     pub max_num_repetitions: usize,
     pub max_num_attempts_get_out_of_loop: usize,
+    pub num_samples: usize,
 }
 
 impl Default for Hyperparameters {
@@ -29,6 +30,7 @@ impl Default for Hyperparameters {
             max_retries: 10,
             max_num_repetitions: 3,
             max_num_attempts_get_out_of_loop: 3,
+            num_samples: 1,
         }
     }
 }

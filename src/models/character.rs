@@ -37,6 +37,12 @@ pub struct Characters {
 }
 
 impl Characters {
+    pub fn new() -> Self {
+        Self {
+            character_descriptions: HashMap::new()
+        }
+    }
+
     pub fn from_string(text: &str) -> Self {
         let mut character_descriptions = HashMap::new();
         let elements = extract_elements(text, CHARACTER_MARKER, STOP_MARKER);

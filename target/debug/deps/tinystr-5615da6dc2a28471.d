@@ -1,0 +1,12 @@
+/Users/xaxpmore/Documents/GitHub/goetia/target/debug/deps/libtinystr-5615da6dc2a28471.rmeta: /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/lib.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/macros.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/ascii.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/asciibyte.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/error.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/int_ops.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/unvalidated.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/ule.rs
+
+/Users/xaxpmore/Documents/GitHub/goetia/target/debug/deps/tinystr-5615da6dc2a28471.d: /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/lib.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/macros.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/ascii.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/asciibyte.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/error.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/int_ops.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/unvalidated.rs /Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/ule.rs
+
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/lib.rs:
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/macros.rs:
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/ascii.rs:
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/asciibyte.rs:
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/error.rs:
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/int_ops.rs:
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/unvalidated.rs:
+/Users/xaxpmore/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tinystr-0.8.1/src/ule.rs:

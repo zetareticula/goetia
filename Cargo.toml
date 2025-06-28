@@ -4,46 +4,46 @@ version = "0.1.0"
 edition = "2021"
 description = "A Rust implementation of the Dramatron script-writing tool"
 license = "Apache-2.0"
-repository = "https://github.com/your-repo/dramatron-rs"
+repository = "https://github.com/zetareticula/goetia"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+keywords = ["script", "writing", "dramatron", "ai"]
+categories = ["command-line-utilities", "text-processing"]
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-rand = "0.8"
-regex = "1.10"
-thiserror = "1.0"
-tokio = { version = "1.40", features = ["full"] }
-clap = { version = "4.0", features = ["derive"] }
-log = "0.4"
-chrono = "0.4"
-anyhow = "1.0"
-futures = "0.3"
-url = "2.4"
-
+serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.132"
+rand = "0.8.5"
+regex = "1.10.3"
+thiserror = "2.0.12"
+tokio = { version = "1.36.1", features = ["full"] }
+clap = { version = "4.5.1", features = ["derive"] }
+log = "0.4.21"
+chrono = "0.4.35"
+anyhow = "1.0.81"
+futures = "0.3.30"
+diff = "0.1.13"
+url = "2.4.1"
+async-trait = "0.1.88"
 
 
 [dev-dependencies]
-tokio = { version = "1.40", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.36.1", features = ["macros", "rt-multi-thread"] }
+assert_cmd = "2.0.17"
+tempfile = "3.17.0"
 
 [features]
 default = ["cli"]
 cli = []
-# Optional features for extended functionality
-# e.g., "web", "gui", "database"
+web = []
+database = []
+
 [profile.dev]
 opt-level = 1
+debug = true
+overflow-checks = true
 
 [profile.release]
 opt-level = 3
-
-[workspace]
-# This is a workspace configuration if you plan to have multiple crates in the same repository.
-# Uncomment and adjust if needed
-members = [
-    "dramatron-rs",
-    # "dramatron-rs-cli"
-]
-
-
-
-
+lto = true
+debug = false

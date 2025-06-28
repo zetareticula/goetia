@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use async_trait::async_trait;
-
-use crate::api::{FilterApi, LanguageApi};
+use crate::api::filter_api::{FilterApi, FilterApiEnum};
+use crate::api::language_api::LanguageApiEnum;
+use crate::models::Scene;
 use crate::config::hyperparameters::Hyperparameters;
 use crate::models::{Characters, Place, Scenes, Story, Title};
 use crate::prompts::templates::PromptTemplates;
@@ -37,7 +37,7 @@ pub struct StoryGenerator {
     scenes: Scenes,
     places: HashMap<String, Place>,
     dialogs: Vec<String>,
-    interventions: HashMap<f64, String>,
+    interventions: HashMap<u64, String>,
     level: usize,
     level_names: &'static [&'static str],
 }
@@ -65,7 +65,7 @@ impl StoryGenerator {
             characters: Characters {
                 character_descriptions: HashMap::new(),
             },
-            scenes: Scenes { scenes: Vec::new() },
+            scenes: Scenes::new(),
             places: HashMap::new(),
             dialogs: Vec::new(),
             interventions: HashMap::new(),
@@ -87,7 +87,7 @@ impl StoryGenerator {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs_f64();
+            .as_secs() as u64;
         self.interventions
             .insert(timestamp, format!("STORYLINE\n{}", storyline));
     }
@@ -126,7 +126,7 @@ impl StoryGenerator {
 
     pub async fn generate_title(
         &self,
-        client: &dyn LanguageApi,
+        client: &LanguageApiEnum,
         filter: Option<&dyn FilterApi>,
         seed: Option<u64>,
         num_samples: usize,
@@ -155,16 +155,18 @@ impl StoryGenerator {
 
     pub async fn generate_characters(
         &self,
-        client: &dyn LanguageApi,
+        client: &LanguageApiEnum,
         filter: Option<&dyn FilterApi>,
         seed: Option<u64>,
         num_samples: usize,
     ) -> Result<(Characters, String), StoryGenerationError> {
+        let characters_prompt = self.prefixes
+            .get("CHARACTERS_PROMPT")
+            .ok_or_else(|| StoryGenerationError::MissingPrompt("CHARACTERS_PROMPT".to_string()))?
+            .to_string();
         let characters_prefix = format!(
             "{}{}",
-            self.prefixes
-                .get("CHARACTERS_PROMPT")
-                .ok_or_else(|| StoryGenerationError::MissingPrompt("CHARACTERS_PROMPT".to_string()))?,
+            characters_prompt,
             self.storyline
         );
         let characters_text = self
@@ -172,7 +174,7 @@ impl StoryGenerator {
             .generate_text(
                 &characters_prefix,
                 client,
-                filter,
+                filter.as_ref(),
                 Some(self.hyperparameters.sample_length),
                 self.hyperparameters.max_paragraph_length_characters,
                 seed,
@@ -187,7 +189,7 @@ impl StoryGenerator {
     pub async fn generate_scenes(
         &self,
         character_descriptions: &HashMap<String, String>,
-        client: &dyn LanguageApi,
+        client: &LanguageApiEnum,
         filter: Option<&dyn FilterApi>,
         seed: Option<u64>,
         num_samples: usize,
@@ -208,7 +210,7 @@ impl StoryGenerator {
             .generate_text(
                 &scenes_prefix,
                 client,
-                filter,
+                filter.as_ref(),
                 Some(self.hyperparameters.sample_length),
                 self.hyperparameters.max_paragraph_length_scenes,
                 seed,
@@ -223,7 +225,7 @@ impl StoryGenerator {
     pub async fn generate_place_descriptions(
         &self,
         scenes: &Scenes,
-        client: &dyn LanguageApi,
+        client: &LanguageApiEnum,
         filter: Option<&dyn FilterApi>,
         seed: Option<u64>,
         num_samples: usize,
@@ -267,7 +269,7 @@ impl StoryGenerator {
         scenes: &[Scene],
         character_descriptions: &HashMap<String, String>,
         place_descriptions: &HashMap<String, Place>,
-        client: &dyn LanguageApi,
+        client: &LanguageApiEnum,
         filter: Option<&dyn FilterApi>,
         seed: Option<u64>,
         num_samples: usize,
@@ -296,22 +298,14 @@ impl StoryGenerator {
         );
         let beat_t = format!("Beat: {}\n", scene.beat);
         let dialog_prefix = format!(
-            "{}{}{}{}{}\n**Dialog:**\n",
-            self.prefixes
-                .get("DIALOG_PROMPT")
-                .ok_or_else(|| StoryGenerationError::MissingPrompt("DIALOG_PROMPT".to_string()))?,
-            place_t,
-            characters_t,
-            plot_element_t,
-            summary_t,
-            beat_t
+            "**Dialog:**\n"
         );
         let dialog = self
             .text_generator
             .generate_text(
                 &dialog_prefix,
                 client,
-                filter,
+                filter.as_ref(),
                 Some(self.hyperparameters.sample_length),
                 self.hyperparameters.max_paragraph_length,
                 seed,
@@ -327,7 +321,7 @@ impl StoryGenerator {
         level: Option<usize>,
         seed: Option<u64>,
         idx: Option<usize>,
-        client: &dyn LanguageApi,
+        client: &LanguageApiEnum,
         filter: Option<&dyn FilterApi>,
     ) -> Result<bool, StoryGenerationError> {
         let level = level.unwrap_or(self.level);
@@ -340,13 +334,13 @@ impl StoryGenerator {
             .unwrap()
             .as_secs_f64();
         self.interventions
-            .insert(timestamp, format!("STEP {}\n", self.level));
+            .insert(timestamp as u64, format!("STEP {}\n", self.level));
 
         match self.level {
             1 => {
                 let (title, titles_prefix) = self.generate_title(client, filter, seed, self.hyperparameters.num_samples).await?;
                 self.interventions
-                    .entry(timestamp)
+                    .entry(timestamp as u64)
                     .and_modify(|e| *e += &title.to_string());
                 self.prompts.get_mut("title").unwrap().push(titles_prefix);
                 self.title = title;
@@ -355,7 +349,7 @@ impl StoryGenerator {
             2 => {
                 let (characters, character_prompts) = self.generate_characters(client, filter, seed, self.hyperparameters.num_samples).await?;
                 self.interventions
-                    .entry(timestamp)
+                    .entry(timestamp as u64)
                     .and_modify(|e| *e += &characters.to_string());
                 self.prompts.get_mut("characters").unwrap().push(character_prompts);
                 self.characters = characters;
@@ -364,7 +358,7 @@ impl StoryGenerator {
             3 => {
                 let (scenes, scene_prompts) = self.generate_scenes(&self.characters.character_descriptions, client, filter, seed, self.hyperparameters.num_samples).await?;
                 self.interventions
-                    .entry(timestamp)
+                    .entry(timestamp as u64)
                     .and_modify(|e| *e += &scenes.to_string());
                 self.prompts.get_mut("scenes").unwrap().push(scene_prompts);
                 self.scenes = scenes;
@@ -374,8 +368,8 @@ impl StoryGenerator {
                 let (place_descriptions, place_prompts) = self.generate_place_descriptions(&self.scenes, client, filter, seed, self.hyperparameters.num_samples).await?;
                 for place in place_descriptions.values() {
                     self.interventions
-                        .entry(timestamp)
-                        .and_modify(|e| *e += &place.to_string());
+                        .entry(timestamp as u64)
+                        .or_insert_with(|| format!("CHARACTER {}\n", idx.unwrap_or(0)));
                 }
                 self.prompts.get_mut("places").unwrap().extend(place_prompts);
                 self.places = place_descriptions;
@@ -403,8 +397,8 @@ impl StoryGenerator {
                     self.dialogs[idx] = dialog.clone();
                     self.prompts.get_mut("dialogs").unwrap()[idx] = dialog_prefix;
                     self.interventions
-                        .entry(timestamp)
-                        .and_modify(|e| *e += &dialog);
+                        .entry(timestamp as u64)
+                        .or_insert_with(|| format!("STEP {}\n", level));
                 } else {
                     let results: Vec<_> = (0..self.scenes.scenes.len())
                         .map(|k| async move {
@@ -424,7 +418,7 @@ impl StoryGenerator {
                     let (dialogs, dialog_prompts): (Vec<_>, Vec<_>) = results.into_iter().unzip();
                     for dialog in &dialogs {
                         self.interventions
-                            .entry(timestamp)
+                            .entry(timestamp as u64)
                             .and_modify(|e| *e += dialog);
                     }
                     self.dialogs = dialogs;
@@ -514,7 +508,7 @@ impl StoryGenerator {
                 entity.map_or(String::new(), |e| e.to_string()),
                 prompt_diff
             );
-            self.interventions.insert(timestamp, intervention);
+            self.interventions.insert(timestamp as u64, intervention);
         }
         Ok(())
     }
@@ -524,8 +518,8 @@ impl StoryGenerator {
         level: usize,
         seed: Option<u64>,
         entity: Option<usize>,
-        client: &dyn LanguageApi,
-        filter: Option<&dyn FilterApi>,
+        client: &LanguageApiEnum,
+        filter: Option<FilterApiEnum>,
     ) -> Result<(), StoryGenerationError> {
         if level >= self.level_names.len() {
             return Err(StoryGenerationError::InvalidLevel(level));
@@ -549,7 +543,7 @@ impl StoryGenerator {
                     .generate_text(
                         &prompt,
                         client,
-                        filter,
+                        filter.as_ref(),
                         Some(self.hyperparameters.sample_length),
                         self.hyperparameters.sample_length,
                         seed,
@@ -576,7 +570,7 @@ impl StoryGenerator {
                     .generate_text(
                         &prompt,
                         client,
-                        filter,
+                        filter.as_ref(),
                         Some(self.hyperparameters.sample_length),
                         self.hyperparameters.sample_length,
                         seed,
@@ -630,7 +624,7 @@ impl StoryGenerator {
                 entity.map_or(String::new(), |e| e.to_string()),
                 prompt_diff
             );
-            self.interventions.insert(timestamp, intervention);
+            self.interventions.insert(timestamp as u64, intervention);
         }
         Ok(())
     }
