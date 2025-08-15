@@ -1,8 +1,26 @@
-# Dramatron-rs
+<div align="center">
+  <img src="logo.svg" alt="Goetia Logo" width="200"/>
+  
+  # Goetia - AI-Powered Story Generation
+  
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+</div>
 
-A Rust implementation of the Dramatron script-writing tool, designed for hierarchical story generation from a provided storyline. This project translates the functionality of the original Python-based Dramatron notebook into a modular, type-safe, and extensible Rust library, enabling script generation with customizable language models and content moderation.
+> **Goetia** is an advanced AI-powered story generation framework developed by **Zeta Reticula Inc**. It provides a robust, type-safe implementation of hierarchical story generation, enabling creators to generate rich, coherent narratives from simple prompts.
 
-## Features
+## 🚀 Why Goetia?
+
+Goetia revolutionizes content creation by:
+- **Accelerating Creative Workflows**: Generate complete story structures, characters, and dialogues in seconds
+- **Enhancing Creativity**: Break through writer's block with AI-assisted story development
+- **Maintaining Creative Control**: Customize generation parameters to match your creative vision
+- **Enterprise-Grade Reliability**: Built with Rust for performance, safety, and concurrency
+
+## 🏗️ Developed by Zeta Reticula Inc
+
+Goetia is proudly developed and maintained by **Zeta Reticula Inc**, a leader in AI-powered creative tools. Our mission is to push the boundaries of human-AI collaboration in creative fields.
+
+## ✨ Features
 
 - **Hierarchical Story Generation**: Generates scripts in stages (storyline, title, characters, scenes, places, dialogs) using a structured, level-based approach.
 - **Modular Design**: Organized into modules for models, generation logic, API abstractions, prompts, and utilities, ensuring maintainability and scalability.
@@ -12,7 +30,7 @@ A Rust implementation of the Dramatron script-writing tool, designed for hierarc
 - **Configurable Hyperparameters**: Customizable generation parameters (e.g., sampling probability, text length) via a `Hyperparameters` struct.
 - **Extensible Prompts**: Prompt templates for generation steps, with support for customization or file-based loading.
 
-## Project Structure
+## 🏗️ Project Structure
 
 ```
 dramatron-rs/
@@ -32,22 +50,58 @@ dramatron-rs/
 └── rustfmt.toml               # Code formatting configuration
 ```
 
-## Installation
+## 🚀 Quick Start
 
 ### Prerequisites
 
 - Rust (stable, edition 2021 or later)
 - Cargo (included with Rust)
+- OpenAI API key (or your preferred LLM provider)
 
-### Steps
+### Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-repo/dramatron-rs.git
-   cd dramatron-rs
+   git clone https://github.com/zetareticulainc/goetia.git
+   cd goetia
    ```
 
-2. Build the project:
+2. Set up your environment variables:
+   ```bash
+   # For OpenAI
+   export OPENAI_API_KEY='your-api-key-here'
+   ```
+
+3. Build the project:
+   ```bash
+   cargo build --release
+   ```
+
+### Basic Usage
+
+1. Run the interactive story generator:
+   ```bash
+   cargo run --release -- --prompt "A sci-fi story about first contact"
+   ```
+
+2. For advanced options:
+   ```bash
+   cargo run --release -- --help
+   ```
+
+## 📚 Documentation
+
+For detailed documentation, API references, and examples, please visit our [documentation website](https://zetareticulainc.github.io/goetia).
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for more details.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright © 2025 Zeta Reticula Inc. All rights reserved.
    ```bash
    cargo build --release
    ```
