@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-
 use crate::models::Scene;
 
 pub fn diff_prompt_change_str(before: &str, after: &str) -> String {
     let mut diff = String::new();
-    let before_lines: Vec<&str> = before.split('\n').collect();
-    let after_lines: Vec<&str> = after.split('\n').collect();
+    // Split lines for diffing
+    let _before_lines: Vec<&str> = before.split('\n').collect();
+    let _after_lines: Vec<&str> = after.split('\n').collect();
     let differ = diff::lines(before, after);
     for line in differ {
         match line {

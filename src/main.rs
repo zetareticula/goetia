@@ -1,4 +1,4 @@
-use dramatron_rs::api::{CustomLanguageApi, MockFilterApi};
+use dramatron_rs::api::{CustomLanguageApi, MockFilterApi, LanguageApiEnum};
 use dramatron_rs::config::hyperparameters::Hyperparameters;
 use dramatron_rs::generator::story_generator::StoryGenerator;
 use dramatron_rs::generator::text_generator::TextGenerator;
@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
         text_generator,
     );
 
-    let language_api = CustomLanguageApi::new(hyperparameters, None, None, None);
+    let language_api = LanguageApiEnum::Custom(CustomLanguageApi::new(hyperparameters, None, None, None));
     let filter_api = MockFilterApi;
 
     let success = generator

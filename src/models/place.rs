@@ -1,11 +1,7 @@
+
 use std::fmt;
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
-use std::fmt::Write;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::collections::HashMap;
 
 impl Hash for Place {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -45,7 +41,7 @@ impl Place {
         (self.coordinates.0, self.coordinates.1)
     }
 
-    pub fn from_string(text: &str, prefix: &str) -> Self {
+    pub fn from_string(text: &str, _prefix: &str) -> Self {
         let text = text.trim();
         let mut lines = text.splitn(2, '\n');
         let name = lines.next().unwrap_or("Unknown Place").to_string();
@@ -66,8 +62,8 @@ impl Place {
     }
 }
 
-impl Display for Place {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+impl fmt::Display for Place {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.display())
     }
 }

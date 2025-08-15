@@ -1,4 +1,4 @@
-use crate::api::filter_api::FilterApiEnum;
+use crate::api::filter_api::FilterApi;
 use crate::api::language_api::LanguageApiEnum;
 use crate::config::hyperparameters::Hyperparameters;
 
@@ -35,7 +35,7 @@ impl TextGenerator {
         &self,
         generation_prompt: &str,
         client: &LanguageApiEnum,
-        filter: Option<&FilterApiEnum>,
+        filter: Option<&dyn FilterApi>,
         sample_length: Option<usize>,
         max_paragraph_length: usize,
         seed: Option<u64>,
@@ -115,7 +115,7 @@ impl TextGenerator {
         &self,
         generation_prompt: &str,
         client: &LanguageApiEnum,
-        filter: Option<&FilterApiEnum>,
+        filter: Option<&dyn FilterApi>,
         sample_length: Option<usize>,
         seed: Option<u64>,
         num_samples: usize,

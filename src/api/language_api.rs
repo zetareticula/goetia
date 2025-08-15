@@ -10,6 +10,7 @@ pub struct LanguageResponse {
     pub text_length: usize,
 }
 
+
 #[derive(Debug)]
 pub enum LanguageApiEnum {
     Custom(CustomLanguageApi),
@@ -46,17 +47,6 @@ pub struct CustomLanguageApi {
     pub model: Option<String>,
     pub model_param: Option<String>,
     pub config_sampling: Option<serde_json::Value>,
-}
-
-impl std::fmt::Debug for &CustomLanguageApi {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CustomLanguageApi")
-            .field("hyperparameters", &self.hyperparameters)
-            .field("model", &self.model)
-            .field("model_param", &self.model_param)
-            .field("config_sampling", &self.config_sampling)
-            .finish()
-    }
 }
 
 impl CustomLanguageApi {

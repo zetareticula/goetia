@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::api::filter_api::{FilterApi, FilterApiEnum};
+use crate::api::filter_api::FilterApi;
 use crate::api::language_api::LanguageApiEnum;
 use crate::models::Scene;
 use crate::config::hyperparameters::Hyperparameters;
@@ -174,7 +174,7 @@ impl StoryGenerator {
             .generate_text(
                 &characters_prefix,
                 client,
-                filter.as_ref(),
+                filter.map(|f| f as &dyn FilterApi),
                 Some(self.hyperparameters.sample_length),
                 self.hyperparameters.max_paragraph_length_characters,
                 seed,
@@ -210,7 +210,7 @@ impl StoryGenerator {
             .generate_text(
                 &scenes_prefix,
                 client,
-                filter.as_ref(),
+                filter.map(|f| f as &dyn FilterApi),
                 Some(self.hyperparameters.sample_length),
                 self.hyperparameters.max_paragraph_length_scenes,
                 seed,
@@ -232,8 +232,9 @@ impl StoryGenerator {
     ) -> Result<(HashMap<String, Place>, Vec<String>), StoryGenerationError> {
         let mut place_descriptions = HashMap::new();
         let mut place_prefixes = Vec::new();
-        let unique_place_names: std::collections::HashSet<String> =
-            scenes.scenes.iter().map(|scene| scene.place.clone()).collect();
+        let unique_place_names: HashSet<_> = scenes.scenes.iter()
+            .filter_map(|scene| scene.place.clone())
+            .collect();
         let place_prefix_base = format!(
             "{}{}\n",
             self.prefixes
@@ -242,23 +243,23 @@ impl StoryGenerator {
             self.storyline
         );
 
-        for place_name in unique_place_names {
-            let place_suffix = format!("Place: {}\nDescription:", place_name);
+        for place_name in unique_place_names.into_iter() {
+            let place_suffix = format!("Place: {}\n", place_name);
             let place_text = self
                 .text_generator
                 .generate_text(
                     &format!("{}{}", place_prefix_base, place_suffix),
                     client,
-                    filter,
+                    filter.map(|f| f as &dyn FilterApi),
                     Some(self.hyperparameters.sample_length_place),
                     self.hyperparameters.max_paragraph_length,
                     seed,
                     num_samples,
-                    Some(self.hyperparameters.max_num_repetitions),
+                    None,
                 )
                 .await?;
             let place = Place::from_string(&place_name, &format!("{}{}", place_suffix, place_text));
-            place_descriptions.insert(place_name.clone(), place);
+            place_descriptions.insert(place_name, place);
             place_prefixes.push(format!("{}{}", place_prefix_base, place_suffix));
         }
         Ok((place_descriptions, place_prefixes))
@@ -277,26 +278,34 @@ impl StoryGenerator {
         let scene = scenes.last().ok_or_else(|| {
             StoryGenerationError::InvalidSceneIndex(0)
         })?;
-        let mut place_t = format!("Place: {}\n", scene.place);
-        if let Some(place_description) = place_descriptions.get(&scene.place) {
-            place_t.push_str(&format!("Description: {}\n", place_description.description));
+        let mut place_t = String::new();
+        if let Some(place_name) = &scene.place {
+            place_t.push_str(&format!("Place: {}\n", place_name));
+            if let Some(place_description) = place_descriptions.get(place_name) {
+                place_t.push_str(&format!("Description: {}\n", place_description.description));
+            }
         }
         let mut characters_t = String::from("Characters: ");
         for (name, description) in character_descriptions {
-            if scene.beat.contains(name) {
-                characters_t.push_str(&format!("{}\n", description));
+            if let Some(beat) = &scene.beat {
+                if beat.contains(name) {
+                    characters_t.push_str(&format!("{}\n", description));
+                }
             }
         }
-        let plot_element_t = format!("Plot element: {}\n", scene.plot_element);
-        let summary_t = format!(
+        let _plot_element_t = format!("Plot element: {}\n", scene.description);
+        let _summary_t = format!(
             "Summary: {}\n",
             if scenes.len() > 1 {
-                format!("Previous beat: {}\n", scenes[scenes.len() - 2].beat)
+                format!("Previous beat: {}\n", scenes[scenes.len() - 2].beat.as_deref().unwrap_or(""))
             } else {
                 String::new()
             }
         );
-        let beat_t = format!("Beat: {}\n", scene.beat);
+        let _beat_t = match &scene.beat {
+            Some(beat) => format!("Beat: {}\n", beat),
+            None => String::new(),
+        };
         let dialog_prefix = format!(
             "**Dialog:**\n"
         );
@@ -305,7 +314,7 @@ impl StoryGenerator {
             .generate_text(
                 &dialog_prefix,
                 client,
-                filter.as_ref(),
+                filter.map(|f| f as &dyn FilterApi),
                 Some(self.hyperparameters.sample_length),
                 self.hyperparameters.max_paragraph_length,
                 seed,
@@ -366,14 +375,17 @@ impl StoryGenerator {
             }
             4 => {
                 let (place_descriptions, place_prompts) = self.generate_place_descriptions(&self.scenes, client, filter, seed, self.hyperparameters.num_samples).await?;
-                for place in place_descriptions.values() {
+                for _place in place_descriptions.values() {
                     self.interventions
                         .entry(timestamp as u64)
                         .or_insert_with(|| format!("CHARACTER {}\n", idx.unwrap_or(0)));
                 }
                 self.prompts.get_mut("places").unwrap().extend(place_prompts);
                 self.places = place_descriptions;
-                let num_places = self.scenes.scenes.iter().map(|scene| scene.place.clone()).collect::<std::collections::HashSet<_>>().len();
+                let place_names: std::collections::HashSet<_> = self.scenes.scenes.iter()
+                    .filter_map(|scene| scene.place.clone())
+                    .collect();
+                let num_places = place_names.len();
                 Ok(self.places.len() == num_places && num_places > 0)
             }
             5 => {
@@ -390,7 +402,7 @@ impl StoryGenerator {
                         &self.characters.character_descriptions,
                         &self.places,
                         client,
-                        filter,
+                        filter.as_ref().map(|f| *f),
                         seed,
                         self.hyperparameters.num_samples,
                     ).await?;
@@ -400,21 +412,25 @@ impl StoryGenerator {
                         .entry(timestamp as u64)
                         .or_insert_with(|| format!("STEP {}\n", level));
                 } else {
-                    let results: Vec<_> = (0..self.scenes.scenes.len())
-                        .map(|k| async move {
-                            self.generate_dialog(
-                                &self.scenes.scenes[..=k],
-                                &self.characters.character_descriptions,
-                                &self.places,
-                                client,
-                                filter,
-                                seed,
-                                self.hyperparameters.num_samples,
-                            )
-                            .await
-                        })
-                        .collect::<Vec<_>>();
-                    let results = futures::future::try_join_all(results).await?;
+                    let mut results = Vec::new();
+                    for k in 0..self.scenes.scenes.len() {
+                        let scenes = &self.scenes.scenes[..=k];
+                        let characters = self.characters.character_descriptions.clone();
+                        let places = self.places.clone();
+                        let client = client.clone();
+                        let num_samples = self.hyperparameters.num_samples;
+                        
+                        let result = StoryGenerator::generate_dialog_static(
+                            scenes,
+                            &characters,
+                            &places,
+                            &client,
+                            filter.map(|f| f as &dyn FilterApi),
+                            seed,
+                            num_samples,
+                        ).await?;
+                        results.push(result);
+                    }
                     let (dialogs, dialog_prompts): (Vec<_>, Vec<_>) = results.into_iter().unzip();
                     for dialog in &dialogs {
                         self.interventions
@@ -513,13 +529,54 @@ impl StoryGenerator {
         Ok(())
     }
 
+    pub async fn generate_dialog_static(
+        scenes: &[Scene],
+        character_descriptions: &HashMap<String, String>,
+        places: &HashMap<String, Place>,
+        client: &LanguageApiEnum,
+        filter: Option<&dyn FilterApi>,
+        seed: Option<u64>,
+        num_samples: usize,
+    ) -> Result<(String, String), StoryGenerationError> {
+        let mut generator = Self {
+            storyline: String::new(),
+            prefixes: PromptTemplates::new(),
+            hyperparameters: Hyperparameters::default(),
+            text_generator: TextGenerator::new(Hyperparameters::default()),
+            prompts: HashMap::new(),
+            title: Title::new(String::new()),
+            characters: Characters {
+                character_descriptions: character_descriptions.clone(),
+            },
+            scenes: Scenes {
+                scenes: scenes.to_vec(),
+                scene_descriptions: HashMap::new(),
+            },
+            places: places.clone(),
+            dialogs: Vec::new(),
+            interventions: HashMap::new(),
+            level: 0,
+            level_names: &[],
+        };
+        
+        generator.generate_dialog(
+            scenes,
+            character_descriptions,
+            places,
+            client,
+            filter,
+            seed,
+            num_samples,
+        ).await
+    }
+
     pub async fn complete(
         &mut self,
         level: usize,
         seed: Option<u64>,
         entity: Option<usize>,
         client: &LanguageApiEnum,
-        filter: Option<FilterApiEnum>,
+        filter: Option<&dyn FilterApi>,
     ) -> Result<(), StoryGenerationError> {
         if level >= self.level_names.len() {
             return Err(StoryGenerationError::InvalidLevel(level));
@@ -543,7 +600,7 @@ impl StoryGenerator {
                     .generate_text(
                         &prompt,
                         client,
-                        filter.as_ref(),
+                        filter.as_ref().map(|f| *f),
                         Some(self.hyperparameters.sample_length),
                         self.hyperparameters.sample_length,
                         seed,
@@ -570,7 +627,7 @@ impl StoryGenerator {
                     .generate_text(
                         &prompt,
                         client,
-                        filter.as_ref(),
+                        filter.as_ref().map(|f| *f),
                         Some(self.hyperparameters.sample_length),
                         self.hyperparameters.sample_length,
                         seed,
@@ -601,7 +658,7 @@ impl StoryGenerator {
                         .generate_text(
                             &prompt,
                             client,
-                            filter,
+                            filter.as_ref().map(|f| *f),
                             Some(self.hyperparameters.sample_length),
                             self.hyperparameters.sample_length,
                             seed,
